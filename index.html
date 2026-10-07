@@ -203,6 +203,20 @@
           </div>
         </div>
 
+        <div class="grid g-3-2">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Machine-learning model</h3><p>An Isolation Forest trained on your own payments, with no labels needed. Unusual payments are isolated in fewer random splits.</p></div>
+              <span class="badge ok" id="mlBadge">Model trained</span>
+            </div>
+            <div id="mlModel"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>ML watchlist</h3><p>Payments the model finds unusual that no rule flagged. Worth a glance, not an alarm.</p></div></div>
+            <div id="mlWatch"></div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-head">
             <div><h3>Habit fingerprint</h3><p>When you spend, by weekday and hour. Rings mark flagged payments. Click a cell to see those payments.</p></div>

@@ -7,6 +7,7 @@ Most expense apps are pie charts with a budget bar. Redline works like a forensi
 **Live demo:** _add your Vercel / GitHub Pages / Netlify URL here_
 
 ## What makes it different
+- **Machine learning:** an Isolation Forest (120 trees, 7 behavioural features) trained in the browser on your own payments. It gives a second opinion on every case, boosts the cases the rules caught, and keeps an ML watchlist of payments that only the model found unusual.
 - **Risk console UI:** a sidebar app with Overview, Case investigator, Transactions, Analytics and Methods & tuning pages, plus dark mode.
 - **Risk timeline:** six months of daily spending like a seismograph, with red spikes on days with flagged payments. Click any day to inspect it.
 - **Case investigator:** a score gauge, weighted evidence, a plot showing where the payment sits against every payment in its category, and related payments. Keyboard shortcuts: J/K to move, F for fraud, L for legitimate.

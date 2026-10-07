@@ -23,7 +23,7 @@ const KEYWORDS = {
 };
 const RULE_LABEL = {
   duplicate: 'Duplicate', split: 'Split purchase', outlier: 'Outlier', threshold: 'Threshold',
-  offhours: 'Off-habit', newpayee: 'Unknown payee', round: 'Round sum',
+  offhours: 'Off-habit', newpayee: 'Unknown payee', round: 'Round sum', ml: 'ML anomaly',
 };
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -183,6 +183,17 @@ function runAudit() {
       flag(t, 'round', 10, 'A perfectly round amount, which is common in manual or invented entries.');
   }
 
+  // 8 · machine learning: Isolation Forest over behavioural features
+  const ml = isolationForest(tx, stats);
+  for (const t of tx) {
+    const sc = ml.scores.get(t.id);
+    const ruleW = flags.has(t.id) ? sum(flags.get(t.id).reasons.map((r) => r.weight)) : 0;
+    if (sc >= ML_CUT && ruleW >= 30) {
+      const pct = ml.percentile(sc);
+      flag(t, 'ml', sc >= 0.66 ? 25 : 15, `Isolation Forest scored it ${sc.toFixed(2)}, more unusual than ${pct.toFixed(1)}% of your payments, based on amount, timing, payee rarity and repeat gaps.`);
+    }
+  }
+
   // score cases
   const cases = [];
   for (const f of flags.values()) {
@@ -197,14 +208,81 @@ function runAudit() {
   [...cases].sort((a, b) => ts(a.tx) - ts(b.tx)).forEach((c, i) => (c.no = i + 1));
   cases.sort((a, b) => b.score - a.score || ts(b.tx) - ts(a.tx));
   const byId = new Map(cases.map((c) => [c.tx.id, c]));
+  ml.watch = tx.filter((t) => ml.scores.get(t.id) >= ML_CUT && !byId.has(t.id)).sort((a, b) => ml.scores.get(b.id) - ml.scores.get(a.id)).slice(0, 6);
 
-  return { tx, cases, byId, stats, patterns: surgePatterns(tx), benford: benford(tx), recurring: recurring(tx) };
+  return { tx, cases, byId, stats, ml, patterns: surgePatterns(tx), benford: benford(tx), recurring: recurring(tx) };
 }
 function emptyAudit() {
-  return { tx: [], cases: [], byId: new Map(), stats: {}, patterns: [], benford: benford([]), recurring: [] };
+  return { tx: [], cases: [], byId: new Map(), stats: {}, ml: null, patterns: [], benford: benford([]), recurring: [] };
 }
 
-// 8 · category surge — rolling 30-day windows so it works on any day of the month
+
+// ═══════════════ Isolation Forest (Liu, Ting & Zhou, 2008) ═══════════════
+// Unsupervised anomaly detection: random trees isolate points; anomalies need fewer splits.
+const ML_TREES = 120, ML_SAMPLE = 256, ML_CUT = 0.62;
+const ML_FEATURES = ['log amount', 'amount vs category', 'hour (sin)', 'hour (cos)', 'weekend', 'payee rarity', 'gap since same payee'];
+function mlFeatures(tx, stats) {
+  const count = {}, last = {};
+  for (const t of tx) { const k = t.merchant.toLowerCase(); count[k] = (count[k] || 0) + 1; }
+  return tx.map((t) => {
+    const k = t.merchant.toLowerCase();
+    const s = stats[t.category];
+    const [hh, mm] = (t.time || '12:00').split(':').map(Number);
+    const ang = ((hh + mm / 60) / 24) * 2 * Math.PI;
+    const gapH = last[k] != null ? (ts(t) - last[k]) / 3600e3 : 24 * 120;
+    last[k] = ts(t);
+    return [
+      Math.log(t.amount),
+      s && s.n >= 6 ? (Math.log(t.amount) - s.lmed) / s.lmad : 0,
+      Math.sin(ang), Math.cos(ang),
+      weekdayIdx(new Date(t.date + 'T00:00')) >= 5 ? 1 : 0,
+      -Math.log(count[k]),
+      Math.log1p(Math.min(gapH, 24 * 120)),
+    ];
+  });
+}
+const cFactor = (n) => (n <= 1 ? 0 : 2 * (Math.log(n - 1) + 0.5772156649) - (2 * (n - 1)) / n);
+function isolationForest(tx, stats) {
+  const X = mlFeatures(tx, stats);
+  const n = X.length, psi = Math.min(ML_SAMPLE, n);
+  const rnd = mulberry32(7 + n);
+  const maxDepth = Math.ceil(Math.log2(Math.max(2, psi)));
+  const build = (idx, depth) => {
+    if (depth >= maxDepth || idx.length <= 1) return { size: idx.length };
+    const feats = [];
+    for (let f = 0; f < X[0].length; f++) {
+      let lo = Infinity, hi = -Infinity;
+      for (const i of idx) { lo = Math.min(lo, X[i][f]); hi = Math.max(hi, X[i][f]); }
+      if (hi > lo) feats.push([f, lo, hi]);
+    }
+    if (!feats.length) return { size: idx.length };
+    const [f, lo, hi] = feats[Math.floor(rnd() * feats.length)];
+    const split = lo + rnd() * (hi - lo);
+    const L = [], R = [];
+    for (const i of idx) (X[i][f] < split ? L : R).push(i);
+    return { f, split, l: build(L, depth + 1), r: build(R, depth + 1) };
+  };
+  const pathLen = (x, node, d) => (node.size != null ? d + cFactor(node.size) : pathLen(x, x[node.f] < node.split ? node.l : node.r, d + 1));
+  const trees = [];
+  for (let t = 0; t < ML_TREES && n > 1; t++) {
+    const idx = [];
+    for (let i = 0; i < psi; i++) idx.push(Math.floor(rnd() * n));
+    trees.push(build(idx, 0));
+  }
+  const cn = cFactor(psi) || 1;
+  const scores = new Map();
+  const all = [];
+  X.forEach((x, i) => {
+    const e = trees.length ? mean(trees.map((tr) => pathLen(x, tr, 0))) : cn;
+    const s = Math.pow(2, -e / cn);
+    scores.set(tx[i].id, s); all.push(s);
+  });
+  all.sort((a, b) => a - b);
+  const percentile = (s) => { let lo = 0, hi = all.length; while (lo < hi) { const m = (lo + hi) >> 1; if (all[m] < s) lo = m + 1; else hi = m; } return (lo / Math.max(1, all.length)) * 100; };
+  return { scores, percentile, trees: trees.length, sample: psi, features: ML_FEATURES, cut: ML_CUT, flagged: all.filter((s) => s >= ML_CUT).length };
+}
+
+// 9 · category surge — rolling 30-day windows so it works on any day of the month
 function surgePatterns(tx) {
   const out = [];
   const end = daysAgoTs(0);
@@ -520,6 +598,7 @@ const RULE_META = {
   offhours: { icon: 'clock', title: 'Off-habit timing' },
   newpayee: { icon: 'userplus', title: 'Unknown payee' },
   round: { icon: 'hash', title: 'Round amount' },
+  ml: { icon: 'sparkle', title: 'ML anomaly (Isolation Forest)' },
 };
 const SENS_LABEL = ['Relaxed', 'Lenient', 'Balanced', 'Sharp', 'Strict'];
 const TAB_LABEL = { open: 'Open', confirmed: 'Fraud', dismissed: 'Cleared' };
@@ -770,6 +849,11 @@ function insights() {
   const hi = cases.filter((c) => c.status === 'open' && c.sev === 'High');
   if (hi.length) out.push({ icon: 'alert', red: true, html: `<b class="red">${inr(sum(hi.map((c) => c.tx.amount)))}</b> sits in ${plural(hi.length, 'high-risk case')}. Start with <b>${esc(hi[0].tx.merchant)}</b>: ${esc(RULE_META[hi[0].reasons[0].rule].title.toLowerCase())}.` });
   if (rec.length) out.push({ icon: 'repeat', html: `${plural(rec.length, 'recurring charge')} (${rec.slice(0, 3).map((r) => esc(r.merchant)).join(', ')}${rec.length > 3 ? '…' : ''}) cost <b>${inr(sum(rec.map((r) => r.yearly)))}</b> a year.` });
+  if (audit.ml) {
+    const live = cases.filter((c) => c.status !== 'dismissed');
+    const agree = live.filter((c) => audit.ml.scores.get(c.tx.id) >= ML_CUT).length;
+    if (live.length) out.push({ icon: 'sparkle', html: `The machine-learning model independently rates <b>${agree} of ${live.length}</b> flagged payments as anomalies${audit.ml.watch.length ? `, and has <b>${audit.ml.watch.length}</b> more on its watchlist` : ''}.` });
+  }
   const daySum = Array(7).fill(0), hourSum = Array(24).fill(0);
   for (const t of tx) { daySum[weekdayIdx(new Date(t.date + 'T00:00'))] += t.amount; hourSum[+t.time.slice(0, 2)] += t.amount; }
   const pd = daySum.indexOf(Math.max(...daySum)), ph = hourSum.indexOf(Math.max(...hourSum));
@@ -882,6 +966,7 @@ function renderCaseDetail(c) {
         ${gauge(c.score, c.sev)}
         <div style="width:100%"><div class="ttl" style="text-align:left">Score build-up</div><div class="stack">${stack}</div></div>
         <p>${plural(c.reasons.length, 'independent signal')} combined. High starts at 60.</p>
+        ${mlBlock(t)}
       </div>
       <div class="cd-main">
         <div><div class="ttl">Why it was flagged</div><div class="evidence">${c.reasons.map((r, i) => `<div class="ev ${i === 0 ? 'top' : ''}" style="animation-delay:${i * 60}ms"><span class="ev-ic">${icon(RULE_META[r.rule].icon, 17)}</span><div><div class="t">${RULE_META[r.rule].title}</div><div class="d">${esc(r.text)}</div></div><span class="w">+${r.weight}</span></div>`).join('')}</div></div>
@@ -1002,10 +1087,51 @@ function renderAnalytics() {
   $('#benfordStats').innerHTML = `<div class="kv"><div><span>Payments</span><b>${bf.n}</b></div><div><span>χ² (crit. 15.5)</span><b>${bf.chi.toFixed(1)}</b></div><div><span>MAD</span><b>${bf.mad.toFixed(3)}</b></div></div>
     <table class="stats"><tr><th>Digit</th><th>Observed</th><th>Expected</th><th>Diff</th></tr>${bf.observed.map((o, i) => { const d = (o - bf.expected[i]) * 100; return `<tr><td>${i + 1}</td><td>${(o * 100).toFixed(1)}%</td><td>${(bf.expected[i] * 100).toFixed(1)}%</td><td class="${d > 3 ? 'hi' : d < -3 ? 'lo' : ''}">${d > 0 ? '+' : ''}${d.toFixed(1)}</td></tr>`; }).join('')}</table>`;
   renderHeatmap();
+  renderML();
   renderPlanner();
   $('#patterns').innerHTML = audit.patterns.length
     ? `<div class="rows">${audit.patterns.map((p) => `<div class="row" data-cat="${p.cat}" style="cursor:pointer"><span class="ins-ic red">${icon('activity', 15)}</span><div><div class="t">${p.cat} is surging</div><div class="s">${inr(p.cur)} in the last 30 days against a usual ${inr(p.base)}</div></div><div class="r"><span class="sev High">${p.ratio.toFixed(1)}×</span></div></div>`).join('')}</div>`
     : `<div class="empty">${icon('activity', 28)}<strong>No surges</strong>Every category is within its usual range.</div>`;
+}
+
+
+function mlBlock(t) {
+  const ml = audit.ml;
+  if (!ml) return '';
+  const sc = ml.scores.get(t.id), pct = ml.percentile(sc);
+  return `<div class="mlbox"><div class="ttl" style="text-align:left">${icon('sparkle', 13)} ML second opinion</div>
+    <div class="mlrow"><b class="num">${sc.toFixed(2)}</b><span>${pct >= 99 ? 'Top 1%' : `Top ${Math.max(1, Math.ceil(100 - pct))}%`} most unusual</span></div>
+    <div class="bar"><span style="width:${Math.min(100, Math.max(4, ((sc - 0.35) / 0.4) * 100))}%;background:${sc >= ML_CUT ? 'var(--red)' : 'var(--ink)'}"></span></div>
+    <p>Isolation Forest · ${ml.trees} trees · ${ml.features.length} features</p></div>`;
+}
+
+function renderML() {
+  const ml = audit.ml;
+  if (!ml) { $('#mlModel').innerHTML = `<div class="empty">${icon('sparkle', 28)}<strong>Not enough data to train</strong></div>`; $('#mlWatch').innerHTML = ''; $('#mlBadge').textContent = 'Waiting for data'; return; }
+  $('#mlBadge').textContent = 'Model trained';
+  const vals = [...ml.scores.values()];
+  const bins = Array(20).fill(0);
+  const lo = 0.3, hi = 0.75;
+  for (const v of vals) bins[Math.max(0, Math.min(19, Math.floor(((v - lo) / (hi - lo)) * 20)))]++;
+  const W = 600, H = 170, B = 24, T = 14;
+  const mx = Math.max(1, ...bins), bw = W / 20;
+  const x = (v) => ((v - lo) / (hi - lo)) * W;
+  let body = `<line x1="0" x2="${W}" y1="${H - B}" y2="${H - B}" stroke="var(--border-2)"/>`;
+  bins.forEach((n, i) => {
+    const v0 = lo + (i / 20) * (hi - lo);
+    const h = (Math.sqrt(n / mx)) * (H - B - T);
+    body += `<g class="hov" ${tipAttr(`<b>Score ${v0.toFixed(2)}–${(v0 + (hi - lo) / 20).toFixed(2)}</b><br>${plural(n, 'payment')}`)}><rect class="hit" x="${i * bw}" y="${T}" width="${bw}" height="${H - B - T}"/><rect class="b" x="${i * bw + 2}" y="${H - B - h}" width="${bw - 4}" height="${h}" rx="2" fill="${v0 >= ML_CUT - 0.001 ? 'var(--red)' : 'var(--ink)'}" opacity="${v0 >= ML_CUT - 0.001 ? 1 : 0.6}"/></g>`;
+  });
+  body += `<line x1="${x(ML_CUT)}" x2="${x(ML_CUT)}" y1="${T - 6}" y2="${H - B}" stroke="var(--red)" stroke-dasharray="4 3"/><text x="${x(ML_CUT) + 6}" y="${T + 4}" style="fill:var(--red-text)">anomaly cut ${ML_CUT}</text>`;
+  for (const v of [0.3, 0.4, 0.5, 0.6, 0.7]) body += `<text x="${x(v)}" y="${H - 7}" text-anchor="middle">${v.toFixed(1)}</text>`;
+  const agree = audit.cases.filter((c) => c.status !== 'dismissed' && ml.scores.get(c.tx.id) >= ML_CUT).length;
+  const live = audit.cases.filter((c) => c.status !== 'dismissed').length;
+  $('#mlModel').innerHTML = `<div class="kv four"><div><span>Trees</span><b>${ml.trees}</b></div><div><span>Sample size</span><b>${ml.sample}</b></div><div><span>Features</span><b>${ml.features.length}</b></div><div><span>Agrees with rules</span><b>${agree}/${live}</b></div></div>
+    <div class="chart">${svgEl(W, H, body)}</div>
+    <div class="feat">${ml.features.map((f) => `<span class="pill plain">${f}</span>`).join('')}</div>`;
+  $('#mlWatch').innerHTML = ml.watch.length
+    ? `<div class="rows">${ml.watch.map((t) => { const sc = ml.scores.get(t.id); return `<div class="row" data-date="${t.date}" style="cursor:pointer">${avatar(t.merchant)}<div><div class="t">${esc(t.merchant)}</div><div class="s">${inrExact(t.amount)} · ${prettyDate(t.date)}, ${esc(t.time)}</div></div><div class="r"><span class="sev Medium">${sc.toFixed(2)}</span></div></div>`; }).join('')}</div>`
+    : `<div class="empty">${icon('check', 28)}<strong>Nothing extra</strong>The model agrees with the rules.</div>`;
 }
 
 function renderHeatmap() {
@@ -1087,6 +1213,7 @@ function renderMethods() {
     ['round', '+10', '₹1,000 or more and a multiple of ₹500. A weak signal that only adds to others.'],
   ];
   $('#methods').innerHTML = rules.map(([k, w, d]) => `<div class="card method"><div class="method-top"><span class="ev-ic">${icon(RULE_META[k].icon, 17)}</span><span class="w">${w}</span></div><h3>${RULE_META[k].title}</h3><p>${d}</p><div class="hits">Fired on <b>${hits[k] || 0}</b> ${(hits[k] || 0) === 1 ? 'case' : 'cases'} in your ledger</div></div>`).join('')
+    + `<div class="card method"><div class="method-top"><span class="ev-ic">${icon('sparkle', 17)}</span><span class="w">+15 to 25</span></div><h3>ML anomaly (Isolation Forest)</h3><p>${audit.ml ? audit.ml.trees : 120} random trees over ${ML_FEATURES.length} behavioural features: amount, amount vs category, time of day, weekend, payee rarity and gap since the last payment to the same payee. Scores ≥ ${ML_CUT} boost cases the rules already caught; the rest go to the ML watchlist.</p><div class="hits">Boosted <b>${hits.ml || 0}</b> cases · watchlist <b>${audit.ml ? audit.ml.watch.length : 0}</b></div></div>`
     + `<div class="card method"><div class="method-top"><span class="ev-ic">${icon('activity', 17)}</span><span class="w mute">pattern</span></div><h3>Category surge</h3><p>Last 30 days against the mean of the three prior 30-day windows. Flags 1.6× or more.</p><div class="hits">Active surges: <b>${audit.patterns.length}</b></div></div>`
     + `<div class="card method"><div class="method-top"><span class="ev-ic">${icon('sigma', 17)}</span><span class="w mute">ledger</span></div><h3>Benford's law</h3><p>Leading-digit distribution tested with Pearson's χ² (8 df) against log₁₀(1 + 1/d). Critical value 15.51 at p = 0.05.</p><div class="hits">Current χ²: <b>${audit.benford.chi.toFixed(1)}</b></div></div>`
     + `<div class="card method"><div class="method-top"><span class="ev-ic">${icon('repeat', 17)}</span><span class="w mute">learning</span></div><h3>Feedback loop</h3><p>Clearing a case adds the merchant to a trusted list, which skips timing, unknown-payee and round-amount checks for it.</p><div class="hits">Trusted merchants: <b>${state.trusted.length}</b></div></div>`;
