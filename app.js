@@ -28,7 +28,7 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ───────────── state ─────────────
-let state = { tx: [], dismissed: [], confirmed: [], trusted: [], budget: 40000, theme: 'paper' };
+let state = { tx: [], dismissed: [], confirmed: [], trusted: [], budget: 40000, theme: 'light' };
 let ui = { tab: 'open', showAll: false };
 let audit = null;
 
@@ -474,12 +474,40 @@ function exportCSV() {
 function render() {
   audit = runAudit();
   renderVerdict();
+  renderKPIs();
   renderCases();
   renderNotes();
   renderMonthChart();
   renderBenford();
   renderHeatmap();
   renderTable();
+}
+
+
+function renderKPIs() {
+  const { tx, cases, benford: bf, byId } = audit;
+  const today = startOfToday();
+  const key = isoDate(today).slice(0, 7);
+  const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const pkey = isoDate(prev).slice(0, 7);
+  const mtd = sum(tx.filter((t) => t.date.startsWith(key)).map((t) => t.amount));
+  const lmtd = sum(tx.filter((t) => t.date.startsWith(pkey) && +t.date.slice(8) <= today.getDate()).map((t) => t.amount));
+  const d = lmtd ? (mtd / lmtd - 1) * 100 : 0;
+  const open = cases.filter((c) => c.status === 'open');
+  const hi = open.filter((c) => c.sev === 'High').length, md = open.filter((c) => c.sev === 'Medium').length;
+  const proj = tx.length ? projectMonth(tx, byId) : 0;
+  const pct = state.budget ? Math.min(100, (proj / state.budget) * 100) : 0;
+  const ok = bf.n >= 50 && bf.chi < 15.51;
+  const card = (label, value, foot, extra = '') => `<div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${extra}<div class="kpi-foot">${foot}</div></div>`;
+  $('#kpis').innerHTML = [
+    card('Spent this month', inr(mtd), lmtd ? `<span class="delta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(0)}%</span> vs same days last month` : 'No prior month data'),
+    card('Under review', inr(sum(open.map((c) => c.tx.amount))), `${open.length} open cases · <b class="red">${hi} high</b> · ${md} medium`,
+      `<div class="sevbar"><span style="flex:${hi};background:var(--red)"></span><span style="flex:${md};background:var(--amber)"></span><span style="flex:${Math.max(0, open.length - hi - md)};background:var(--green)"></span></div>`),
+    card('Projected month-end', inr(proj), state.budget ? `${((proj / state.budget) * 100).toFixed(0)}% of ${inr(state.budget)} budget` : 'Set a budget below',
+      `<div class="pbar ${proj > state.budget ? 'over' : ''}"><span style="width:${pct}%"></span></div>`),
+    card('Ledger integrity', bf.n < 50 ? 'n/a' : ok ? 'Pass' : 'Review', bf.n < 50 ? 'Needs 50+ entries' : `Benford χ² ${bf.chi.toFixed(1)} (critical 15.5)`,
+      `<span class="badge ${bf.n < 50 ? 'mute' : ok ? 'ok' : 'bad'}">${bf.n < 50 ? 'Insufficient data' : ok ? 'Consistent' : 'Deviation'}</span>`),
+  ].join('');
 }
 
 function renderVerdict() {
@@ -699,7 +727,8 @@ function toast(msg, alert = false) {
 // ───────────── theme ─────────────
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme;
-  $('#btnTheme').textContent = state.theme === 'night' ? 'Day' : 'Night';
+  if (!['light', 'dark'].includes(state.theme)) state.theme = 'light';
+  $('#btnTheme').textContent = state.theme === 'dark' ? 'Light' : 'Dark';
 }
 
 // ═══════════════ wiring ═══════════════
@@ -741,7 +770,7 @@ function init() {
     save(); render(); toast('Books cleared.');
   });
   $('#btnExport').addEventListener('click', exportCSV);
-  $('#btnTheme').addEventListener('click', () => { state.theme = state.theme === 'night' ? 'paper' : 'night'; save(); applyTheme(); render(); });
+  $('#btnTheme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; save(); applyTheme(); render(); });
   $('#csvInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;

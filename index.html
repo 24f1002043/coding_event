@@ -3,37 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Redline — a forensic auditor for your spending</title>
+  <title>Redline · Expense Risk Console</title>
   <meta name="description" content="Redline reads every expense, checks it against your own habits and Benford's law, and redlines what doesn't belong." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="page">
-
-    <!-- ───────────── Masthead ───────────── -->
-    <header class="masthead">
-      <div class="mast-bar">
-        <span>Vol. I &nbsp;·&nbsp; Forensic edition</span>
-        <span id="today"></span>
-        <nav class="mast-actions">
-          <button id="btnDemo" class="link">Load sample books</button>
-          <label class="link">Import CSV<input id="csvInput" type="file" accept=".csv,text/csv" hidden /></label>
-          <button id="btnExport" class="link">Export audit</button>
-          <button id="btnTheme" class="link">Night</button>
-          <button id="btnClear" class="link danger">Clear</button>
-        </nav>
+  <header class="appbar">
+    <div class="appbar-in">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2c2c29"/><path d="M8 11h16M8 16h16M8 21h10" stroke="#fff" stroke-opacity=".3" stroke-width="2" stroke-linecap="round"/><path d="M7 22 25 9" stroke="#e5484d" stroke-width="2.6" stroke-linecap="round"/></svg>
+        <div><div class="brand-name">Redline</div><div class="brand-sub">Expense risk console</div></div>
       </div>
-      <h1 class="title">Redline<span class="title-dot">.</span></h1>
-      <p class="tagline">A forensic auditor for your spending. It reads every entry, checks it against your own habits and against Benford's law, and <em>redlines</em> what doesn't belong.</p>
-      <p id="verdict" class="verdict"></p>
-    </header>
+      <nav class="mast-actions">
+        <button id="btnDemo" class="link">Sample data</button>
+        <label class="link">Import CSV<input id="csvInput" type="file" accept=".csv,text/csv" hidden /></label>
+        <button id="btnExport" class="link">Export</button>
+        <button id="btnTheme" class="link">Dark</button>
+        <button id="btnClear" class="link danger">Clear</button>
+      </nav>
+    </div>
+  </header>
+  <div class="page">
+    <section class="hero">
+      <div>
+        <h1 class="title">Overview</h1>
+        <p id="verdict" class="verdict"></p>
+      </div>
+      <div class="live"><span class="dot-live"></span><span id="today"></span></div>
+    </section>
+    <div id="kpis" class="kpis"></div>
 
     <!-- ───────────── Command line entry ───────────── -->
     <section class="entry">
-      <label for="cmd" class="eyebrow">Write an entry, the way you'd say it</label>
+      <label for="cmd" class="eyebrow">Quick add: type it the way you'd say it</label>
       <div class="cmd-wrap">
         <span class="cmd-caret">›</span>
         <input id="cmd" autocomplete="off" spellcheck="false"
@@ -137,7 +142,7 @@
     </section>
 
     <footer class="colophon">
-      Set in Instrument Serif &amp; IBM Plex. All analysis runs in your browser, so no entry ever leaves this device.
+      Redline · All analysis runs in your browser, so no entry ever leaves this device.
     </footer>
   </div>
 
