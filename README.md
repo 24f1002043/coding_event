@@ -64,3 +64,6 @@ sample-statement.csv  bank-statement-style file to import live during the demo
 5. **Live entry (20s):** type `spent 4999 at royal gifts at 2am via card` and it gets redlined instantly.
 6. **Import (15s):** import `sample-statement.csv`. A raw bank statement with no categories gets categorised automatically and 4 new redlines appear (duplicate Myntra charge, 3 am betting site, threshold hugger).
 7. **Learning (10s):** click *Legitimate, trust payee* and Redline learns. Close with "Runs entirely in your browser, and it's live at …"
+
+## Photography
+Hero and category photos come from [Unsplash](https://unsplash.com/?utm_source=redline&utm_medium=referral) and are hotlinked with credits shown on each image: Kingsley Mkpandiok, Dillon Shook, Zac Ong, Rowan Freeman, H&CO, Christian Lue and Nathana Rebouças.

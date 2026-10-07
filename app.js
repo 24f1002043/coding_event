@@ -650,11 +650,55 @@ function dailySeries(days) {
   return out;
 }
 
+
+// ───────────── photography (Unsplash, hotlinked per their guidelines) ─────────────
+const PHOTOS = {
+  hero: { id: 'photo-1791291716988-0d1d56381faf', by: 'Kingsley Mkpandiok', user: 'iamkingsleey' },
+  cases: { id: 'photo-1735948055457-8d816fb80a87', by: 'Dillon Shook', user: 'dillonjshook' },
+  analytics: { id: 'photo-1505811210036-052144988918', by: 'Zac Ong', user: 'zacong' },
+  Food: { id: 'photo-1617347454431-f49d7ff5c3b1', by: 'Rowan Freeman', user: 'rowanfreeman' },
+  Shopping: { id: 'photo-1560073210-1eb8ea89d4cc', by: 'H&CO', user: 'hngstrm' },
+  Transport: { id: 'photo-1624607391672-2b7d1bcafe7c', by: 'Christian Lue', user: 'christianlue' },
+  card: { id: 'photo-1654263937079-f63a3ea4d48b', by: 'Nathana Rebouças', user: 'nathanareboucas' },
+};
+const photoUrl = (p, w = 1600) => `https://images.unsplash.com/${p.id}?auto=format&fit=crop&w=${w}&q=70`;
+const creditHTML = (p) => `Photo: ${esc(p.by)} / Unsplash`;
+const creditHref = (p) => `https://unsplash.com/@${p.user}?utm_source=redline&utm_medium=referral`;
+const catPhoto = (c) => PHOTOS[c] || PHOTOS.card;
+function initHeroes() {
+  $$('.hero[data-photo]').forEach((hero) => {
+    const p = PHOTOS[hero.dataset.photo];
+    const img = hero.querySelector('.hero-img');
+    const pre = new Image();
+    pre.onload = () => { img.style.backgroundImage = `url("${pre.src}")`; img.classList.add('loaded'); };
+    pre.src = photoUrl(p, hero.classList.contains('hero-xl') ? 1800 : 1400);
+    const a = hero.querySelector('[data-credit]');
+    a.textContent = creditHTML(p); a.href = creditHref(p);
+    hero.addEventListener('mousemove', (e) => {
+      const r = hero.getBoundingClientRect();
+      hero.style.setProperty('--mx', (((e.clientX - r.left) / r.width) * 2 - 1).toFixed(3));
+      hero.style.setProperty('--my', (((e.clientY - r.top) / r.height) * 2 - 1).toFixed(3));
+    });
+    hero.addEventListener('mouseleave', () => { hero.style.setProperty('--mx', 0); hero.style.setProperty('--my', 0); });
+  });
+}
+function renderHeroChips() {
+  const open = audit.cases.filter((c) => c.status === 'open');
+  const live = audit.cases.filter((c) => c.status !== 'dismissed');
+  const agree = audit.ml ? live.filter((c) => audit.ml.scores.get(c.tx.id) >= ML_CUT).length : 0;
+  const bf = audit.benford, ok = bf.n >= 50 && bf.chi < 15.51;
+  $('#heroChips').innerHTML = audit.tx.length ? `
+    <div class="chip-g" data-go="cases"><span class="chip-ic red">${icon('shield', 17)}</span><div><span>Open cases</span><b>${open.length}</b></div></div>
+    <div class="chip-g" data-go="analytics"><span class="chip-ic">${icon('sparkle', 17)}</span><div><span>ML agrees with rules</span><b>${agree}/${live.length}</b></div></div>
+    <div class="chip-g" data-go="analytics"><span class="chip-ic ${ok ? 'green' : 'red'}">${icon('sigma', 17)}</span><div><span>Benford integrity</span><b>${bf.n < 50 ? 'n/a' : ok ? 'Pass' : 'Review'}</b></div></div>` : '';
+}
+
 // ───────────── render root ─────────────
 function render() {
   audit = runAudit();
   renderChrome();
   renderOverview();
+  renderHeroChips();
   renderCases();
   renderTransactions();
   renderAnalytics();
@@ -951,7 +995,14 @@ function renderCaseDetail(c) {
   const s = audit.stats[t.category];
   const stack = c.reasons.map((r) => `<span style="flex:${r.weight}" ${tipAttr(`${RULE_META[r.rule].title} +${r.weight}`)}></span>`).join('');
   const statusPill = c.status === 'open' ? '<span class="pill plain">Open</span>' : c.status === 'confirmed' ? '<span class="sev fraud">Confirmed fraud</span>' : '<span class="sev cleared">Cleared</span>';
+  const ph = catPhoto(t.category);
   el.innerHTML = `
+    <div class="cd-cover" style="background-image:url('${photoUrl(ph, 1200)}')">
+      <div class="hero-scan" aria-hidden="true"></div>
+      <span class="cd-cover-tag">${icon(RULE_META[c.reasons[0].rule].icon, 14)}${RULE_META[c.reasons[0].rule].title}</span>
+      <div class="cd-cover-score">Risk score<b>${c.score}/100</b></div>
+      <a class="credit" href="${creditHref(ph)}" target="_blank" rel="noopener">${creditHTML(ph)}</a>
+    </div>
     <div class="cd-head">
       ${avatar(t.merchant, 'lg')}
       <div class="cd-title">
@@ -1279,6 +1330,7 @@ function init() {
   if (!state.limit) state.limit = 5000;
   if (!state.sens) state.sens = 3;
   hydrateIcons();
+  initHeroes();
   applyTheme();
   initTooltip();
   const now = new Date();

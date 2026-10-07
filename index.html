@@ -76,16 +76,21 @@
 
       <!-- ───── Overview ───── -->
       <section class="page" data-page="overview">
-        <div class="page-head">
-          <div>
-            <h1>Overview</h1>
-            <p class="sub" id="verdict"></p>
+        <section class="hero hero-xl" data-photo="hero">
+          <div class="hero-media"><div class="hero-img"></div></div>
+          <div class="hero-scan" aria-hidden="true"></div>
+          <div class="hero-in">
+            <div class="hero-eyebrow"><span class="dot-live"></span>Live audit · <span id="today"></span></div>
+            <h1>Every payment,<br /><span class="redline">audited.</span></h1>
+            <p class="hero-sub" id="verdict"></p>
+            <div class="hero-cta">
+              <a href="#cases" class="btn danger"><span data-icon="shield"></span>Open investigator</a>
+              <button class="btn glass" id="btnPrint"><span data-icon="printer"></span>Print report</button>
+            </div>
           </div>
-          <div class="head-meta">
-            <span class="live"><span class="dot-live"></span><span id="today"></span></span>
-            <button class="btn ghost sm" id="btnPrint"><span data-icon="printer"></span>Print report</button>
-          </div>
-        </div>
+          <div class="hero-chips" id="heroChips"></div>
+          <a class="credit" data-credit target="_blank" rel="noopener"></a>
+        </section>
 
         <div id="alertBanner"></div>
         <div class="kpis" id="kpis"></div>
@@ -143,9 +148,16 @@
 
       <!-- ───── Cases ───── -->
       <section class="page" data-page="cases" hidden>
-        <div class="page-head">
-          <div><h1>Case investigator</h1><p class="sub">Every flagged payment, the evidence behind its score, and where it sits against your normal.</p></div>
-        </div>
+        <section class="hero hero-sm" data-photo="cases">
+          <div class="hero-media"><div class="hero-img"></div></div>
+          <div class="hero-scan" aria-hidden="true"></div>
+          <div class="hero-in">
+            <div class="hero-eyebrow"><span data-icon="shield" data-size="14"></span>Investigate</div>
+            <h1>Case investigator</h1>
+            <p class="hero-sub">Every flagged payment, the evidence behind its score, and where it sits against your normal. Use <kbd>J</kbd> <kbd>K</kbd> to move, <kbd>F</kbd> or <kbd>L</kbd> to decide.</p>
+          </div>
+          <a class="credit" data-credit target="_blank" rel="noopener"></a>
+        </section>
         <div class="split">
           <div class="card case-list-card">
             <div class="seg" id="caseTabs">
@@ -185,9 +197,16 @@
 
       <!-- ───── Analytics ───── -->
       <section class="page" data-page="analytics" hidden>
-        <div class="page-head">
-          <div><h1>Analytics</h1><p class="sub">Forensic tests across the whole ledger, and a planner for what to do next.</p></div>
-        </div>
+        <section class="hero hero-sm" data-photo="analytics">
+          <div class="hero-media"><div class="hero-img"></div></div>
+          <div class="hero-scan" aria-hidden="true"></div>
+          <div class="hero-in">
+            <div class="hero-eyebrow"><span data-icon="chart" data-size="14"></span>Analyse</div>
+            <h1>Analytics</h1>
+            <p class="hero-sub">Forensic tests, a machine-learning model and a savings planner, all running on your own ledger.</p>
+          </div>
+          <a class="credit" data-credit target="_blank" rel="noopener"></a>
+        </section>
         <div class="grid g-3-2">
           <div class="card">
             <div class="card-head">
