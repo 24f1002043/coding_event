@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="paper">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redline — a forensic auditor for your spending</title>
+  <meta name="description" content="Redline reads every expense, checks it against your own habits and Benford's law, and redlines what doesn't belong." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+
+    <!-- ───────────── Masthead ───────────── -->
+    <header class="masthead">
+      <div class="mast-bar">
+        <span>Vol. I &nbsp;·&nbsp; Forensic edition</span>
+        <span id="today"></span>
+        <nav class="mast-actions">
+          <button id="btnDemo" class="link">Load sample books</button>
+          <label class="link">Import CSV<input id="csvInput" type="file" accept=".csv,text/csv" hidden /></label>
+          <button id="btnExport" class="link">Export audit</button>
+          <button id="btnTheme" class="link">Night</button>
+          <button id="btnClear" class="link danger">Clear</button>
+        </nav>
+      </div>
+      <h1 class="title">Redline<span class="title-dot">.</span></h1>
+      <p class="tagline">A forensic auditor for your spending. It reads every entry, checks it against your own habits and against Benford's law, and <em>redlines</em> what doesn't belong.</p>
+      <p id="verdict" class="verdict"></p>
+    </header>
+
+    <!-- ───────────── Command line entry ───────────── -->
+    <section class="entry">
+      <label for="cmd" class="eyebrow">Write an entry, the way you'd say it</label>
+      <div class="cmd-wrap">
+        <span class="cmd-caret">›</span>
+        <input id="cmd" autocomplete="off" spellcheck="false"
+               placeholder="spent 450 at swiggy yesterday 9pm via upi" />
+        <button id="cmdGo" class="ink-btn">Enter</button>
+      </div>
+      <div id="cmdPreview" class="cmd-preview"></div>
+      <details class="full-form">
+        <summary>or use the long form</summary>
+        <form id="expForm" class="form-grid">
+          <label>Date<input type="date" name="date" required /></label>
+          <label>Time<input type="time" name="time" value="12:00" /></label>
+          <label>Amount (₹)<input type="number" name="amount" step="0.01" min="0.01" required /></label>
+          <label>Merchant<input type="text" name="merchant" required /></label>
+          <label>Category<select name="category"><option value="">Infer it</option></select></label>
+          <label>Paid with<select name="method">
+            <option>UPI</option><option>Credit Card</option><option>Debit Card</option><option>Cash</option><option>Net Banking</option>
+          </select></label>
+          <label class="span2">Note<input type="text" name="note" /></label>
+          <button class="ink-btn">Add to the books</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- ───────────── Cases + Notes ───────────── -->
+    <div class="grid-main">
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="num">I.</span> The redlines</h2>
+          <div class="tabs" id="caseTabs">
+            <button data-tab="open" class="on">Open</button>
+            <button data-tab="confirmed">Confirmed</button>
+            <button data-tab="dismissed">Cleared</button>
+          </div>
+        </div>
+        <p class="lede">Every flagged entry is a case file. Each reason carries a weight; together they form the risk score. Clear a case and Redline learns to trust that merchant.</p>
+        <div id="cases" class="cases"></div>
+      </section>
+
+      <aside class="block">
+        <div class="block-head"><h2><span class="num">II.</span> Auditor's notes</h2></div>
+        <ol id="notes" class="notes"></ol>
+        <div id="patterns"></div>
+      </aside>
+    </div>
+
+    <div class="grid-two">
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="num">III.</span> The monthly ledger</h2>
+          <label class="budget">Budget ₹<input id="budget" type="number" min="0" step="500" /></label>
+        </div>
+        <p class="lede">Solid ink is spent, red is under question, hatched is where this month is heading at the current pace.</p>
+        <div id="monthChart" class="chart"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2><span class="num">IV.</span> Benford's test</h2></div>
+        <p class="lede">In honest financial records, about 30% of amounts start with a 1 and fewer than 5% start with a 9. Fabricated or manipulated books drift from this curve.</p>
+        <div id="benfordChart" class="chart"></div>
+        <p id="benfordVerdict" class="small-verdict"></p>
+      </section>
+    </div>
+
+    <section class="block">
+      <div class="block-head"><h2><span class="num">V.</span> Habit fingerprint</h2></div>
+      <p class="lede">When you usually spend, by weekday and hour. Darker ink means more spending at that time. Red rings mark a flagged entry, which usually falls outside your normal pattern.</p>
+      <div id="heatmap" class="chart"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2><span class="num">VI.</span> The books <span id="txCount" class="count"></span></h2>
+        <div class="filters">
+          <input id="search" placeholder="Search merchant or note" />
+          <select id="catFilter"><option value="">All categories</option></select>
+          <label class="check"><input id="onlyFlagged" type="checkbox" /> Redlined only</label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="ledger">
+          <thead><tr><th>Date</th><th>Time</th><th>Merchant</th><th>Category</th><th>Paid with</th><th class="r">Amount</th><th class="r">Risk</th><th></th></tr></thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+      <button id="showMore" class="link more" hidden>Show all entries</button>
+    </section>
+
+    <section class="block methods">
+      <div class="block-head"><h2><span class="num">VII.</span> Methods</h2></div>
+      <div class="methods-grid">
+        <div><h3>Robust outlier</h3><p>Median and median absolute deviation of log-amounts per category, so a single huge charge can't hide by inflating the average. Flags modified z &gt; 3.5.</p></div>
+        <div><h3>Duplicate charge</h3><p>Same merchant and same amount within 48 hours (2 hours for small amounts).</p></div>
+        <div><h3>Split purchase</h3><p>Several same-day charges at one merchant, each under the ₹5,000 approval limit but adding up to more than it.</p></div>
+        <div><h3>Threshold hugging</h3><p>Amounts in the last 5% below the approval limit, a classic expense-fraud tell.</p></div>
+        <div><h3>Off-habit timing</h3><p>Large spends in hours that account for less than 2% of your history.</p></div>
+        <div><h3>Unknown payee</h3><p>First-ever merchant charging above your 90th percentile for that category. Only checked once there are 3 weeks of history to compare against.</p></div>
+        <div><h3>Category surge</h3><p>Last 30 days compared with the average of the three 30-day windows before them.</p></div>
+        <div><h3>Benford's law</h3><p>First-digit distribution tested with Pearson's χ² (8 df) against log₁₀(1 + 1/d).</p></div>
+      </div>
+    </section>
+
+    <footer class="colophon">
+      Set in Instrument Serif &amp; IBM Plex. All analysis runs in your browser, so no entry ever leaves this device.
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
