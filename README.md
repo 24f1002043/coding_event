@@ -7,13 +7,17 @@ Most expense apps are pie charts with a budget bar. Redline works like a forensi
 **Live demo:** _add your Vercel / GitHub Pages / Netlify URL here_
 
 ## What makes it different
-- **Explainable risk scoring.** Every flag lists its reasons and their weights (+55 duplicate, +35 threshold…). There is no black box.
-- **Forensic-accounting rules, not just "over budget".** It catches split purchases, threshold hugging, duplicate billing, off-habit timing and unknown payees.
-- **Benford's law test** on your whole ledger, with a Pearson χ² verdict.
-- **Habit fingerprint.** A weekday × hour heatmap of when you spend, with flagged entries ringed in red.
-- **Natural-language entry.** Type `spent 450 at swiggy yesterday 9pm via upi` and it parses amount, payee, category, date, time and payment method live as you type.
-- **Learns from you.** Clearing a case makes Redline trust that payee. Categories are learned from your own history before keyword rules apply.
-- **Privacy-first.** Zero backend, zero API keys, nothing leaves the browser.
+- **Risk console UI:** a sidebar app with Overview, Case investigator, Transactions, Analytics and Methods & tuning pages, plus dark mode.
+- **Risk timeline:** six months of daily spending like a seismograph, with red spikes on days with flagged payments. Click any day to inspect it.
+- **Case investigator:** a score gauge, weighted evidence, a plot showing where the payment sits against every payment in its category, and related payments. Keyboard shortcuts: J/K to move, F for fraud, L for legitimate.
+- **Interactive charts:** hover tooltips everywhere. Clicking a month, a day, a heatmap cell or a category opens the matching transactions.
+- **Live tuning:** change the approval limit and the detection sensitivity and the whole audit re-runs instantly.
+- **Savings planner:** sliders that show how much trimming each flexible category saves per month and year.
+- **Benford's law test** with a chi-square verdict, and a **habit fingerprint** heatmap.
+- **Natural-language entry:** type `spent 450 at swiggy yesterday 9pm via upi`.
+- **Learns from you:** clearing a case makes Redline trust that payee. Undo for every destructive action.
+- **Printable audit report** and CSV export.
+- **Privacy-first:** no backend, no API keys, nothing leaves the browser.
 
 ## Detection methods
 | Rule | Weight | How |
@@ -47,7 +51,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 ```
 index.html            page structure
 styles.css            paper & ink theme (day / night)
-app.js                audit engine, NL parser, CSV import/export, SVG charts
+app.js                audit engine, NL parser, CSV import/export, SVG charts, UI
 sample-statement.csv  bank-statement-style file to import live during the demo
 ```
 

@@ -1,152 +1,288 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="paper">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Redline · Expense Risk Console</title>
-  <meta name="description" content="Redline reads every expense, checks it against your own habits and Benford's law, and redlines what doesn't belong." />
+  <meta name="description" content="Redline audits every expense against your own habits and Benford's law, and explains every anomaly it finds." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111110'/%3E%3Cpath d='M8 11h16M8 16h16M8 21h10' stroke='%23fff' stroke-opacity='.35' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M7 22 25 9' stroke='%23e5484d' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="appbar">
-    <div class="appbar-in">
-      <div class="brand">
-        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2c2c29"/><path d="M8 11h16M8 16h16M8 21h10" stroke="#fff" stroke-opacity=".3" stroke-width="2" stroke-linecap="round"/><path d="M7 22 25 9" stroke="#e5484d" stroke-width="2.6" stroke-linecap="round"/></svg>
-        <div><div class="brand-name">Redline</div><div class="brand-sub">Expense risk console</div></div>
-      </div>
-      <nav class="mast-actions">
-        <button id="btnDemo" class="link">Sample data</button>
-        <label class="link">Import CSV<input id="csvInput" type="file" accept=".csv,text/csv" hidden /></label>
-        <button id="btnExport" class="link">Export</button>
-        <button id="btnTheme" class="link">Dark</button>
-        <button id="btnClear" class="link danger">Clear</button>
-      </nav>
-    </div>
-  </header>
-  <div class="page">
-    <section class="hero">
+<div class="app">
+
+  <!-- ═════════ Sidebar ═════════ -->
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#overview">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#252523"/>
+        <path d="M8 11h16M8 16h16M8 21h10" stroke="#fff" stroke-opacity=".3" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 22 25 9" stroke="#e5484d" stroke-width="2.6" stroke-linecap="round"/>
+      </svg>
       <div>
-        <h1 class="title">Overview</h1>
-        <p id="verdict" class="verdict"></p>
+        <div class="brand-name">Redline</div>
+        <div class="brand-sub">Expense risk console</div>
       </div>
-      <div class="live"><span class="dot-live"></span><span id="today"></span></div>
-    </section>
-    <div id="kpis" class="kpis"></div>
+    </a>
 
-    <!-- ───────────── Command line entry ───────────── -->
-    <section class="entry">
-      <label for="cmd" class="eyebrow">Quick add: type it the way you'd say it</label>
-      <div class="cmd-wrap">
-        <span class="cmd-caret">›</span>
-        <input id="cmd" autocomplete="off" spellcheck="false"
-               placeholder="spent 450 at swiggy yesterday 9pm via upi" />
-        <button id="cmdGo" class="ink-btn">Enter</button>
+    <nav class="nav" id="nav">
+      <div class="nav-label">Workspace</div>
+      <a href="#overview" data-nav="overview"><span data-icon="grid"></span>Overview</a>
+      <a href="#cases" data-nav="cases"><span data-icon="shield"></span>Cases<span class="nav-badge" id="navCases"></span></a>
+      <a href="#transactions" data-nav="transactions"><span data-icon="list"></span>Transactions<span class="nav-count" id="navTx"></span></a>
+      <a href="#analytics" data-nav="analytics"><span data-icon="chart"></span>Analytics</a>
+      <div class="nav-label">Engine</div>
+      <a href="#methods" data-nav="methods"><span data-icon="sliders"></span>Methods &amp; tuning</a>
+    </nav>
+
+    <div class="side-foot">
+      <div class="shortcuts">
+        <div class="nav-label">Shortcuts</div>
+        <div><kbd>/</kbd> Quick add</div>
+        <div><kbd>J</kbd><kbd>K</kbd> Next / previous case</div>
+        <div><kbd>F</kbd> Fraud &nbsp;<kbd>L</kbd> Legitimate</div>
       </div>
-      <div id="cmdPreview" class="cmd-preview"></div>
-      <details class="full-form">
-        <summary>or use the long form</summary>
-        <form id="expForm" class="form-grid">
-          <label>Date<input type="date" name="date" required /></label>
-          <label>Time<input type="time" name="time" value="12:00" /></label>
-          <label>Amount (₹)<input type="number" name="amount" step="0.01" min="0.01" required /></label>
-          <label>Merchant<input type="text" name="merchant" required /></label>
-          <label>Category<select name="category"><option value="">Infer it</option></select></label>
-          <label>Paid with<select name="method">
-            <option>UPI</option><option>Credit Card</option><option>Debit Card</option><option>Cash</option><option>Net Banking</option>
-          </select></label>
-          <label class="span2">Note<input type="text" name="note" /></label>
-          <button class="ink-btn">Add to the books</button>
-        </form>
-      </details>
-    </section>
+      <div class="privacy">
+        <span data-icon="lock"></span>
+        <div><strong>Local-only processing</strong><span>Your entries never leave this browser.</span></div>
+      </div>
+      <button class="theme-btn" id="btnTheme"><span id="themeIcon" data-icon="moon"></span><span id="themeLabel">Dark mode</span></button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
 
-    <!-- ───────────── Cases + Notes ───────────── -->
-    <div class="grid-main">
-      <section class="block">
-        <div class="block-head">
-          <h2><span class="num">I.</span> The redlines</h2>
-          <div class="tabs" id="caseTabs">
-            <button data-tab="open" class="on">Open</button>
-            <button data-tab="confirmed">Confirmed</button>
-            <button data-tab="dismissed">Cleared</button>
+  <!-- ═════════ Main ═════════ -->
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Menu"><span data-icon="menu"></span></button>
+      <div class="quick">
+        <span data-icon="sparkle" class="quick-icon"></span>
+        <input id="cmd" autocomplete="off" spellcheck="false" placeholder="Quick add: “spent 450 at swiggy yesterday 9pm via upi”" />
+        <kbd>/</kbd>
+        <div id="cmdPreview" class="quick-preview"></div>
+      </div>
+      <div class="top-actions">
+        <button class="btn ghost" id="btnDemo" title="Load six months of sample data"><span data-icon="zap"></span><span class="hide-sm">Sample data</span></button>
+        <label class="btn ghost" title="Import a bank statement CSV"><span data-icon="upload"></span><span class="hide-sm">Import</span><input id="csvInput" type="file" accept=".csv,text/csv" hidden /></label>
+        <button class="btn ghost" id="btnExport" title="Export the audit as CSV"><span data-icon="download"></span><span class="hide-sm">Export</span></button>
+        <button class="btn primary" id="btnNew"><span data-icon="plus"></span><span class="hide-sm">New entry</span></button>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ───── Overview ───── -->
+      <section class="page" data-page="overview">
+        <div class="page-head">
+          <div>
+            <h1>Overview</h1>
+            <p class="sub" id="verdict"></p>
+          </div>
+          <div class="head-meta">
+            <span class="live"><span class="dot-live"></span><span id="today"></span></span>
+            <button class="btn ghost sm" id="btnPrint"><span data-icon="printer"></span>Print report</button>
           </div>
         </div>
-        <p class="lede">Every flagged entry is a case file. Each reason carries a weight; together they form the risk score. Clear a case and Redline learns to trust that merchant.</p>
-        <div id="cases" class="cases"></div>
-      </section>
 
-      <aside class="block">
-        <div class="block-head"><h2><span class="num">II.</span> Auditor's notes</h2></div>
-        <ol id="notes" class="notes"></ol>
-        <div id="patterns"></div>
-      </aside>
-    </div>
+        <div id="alertBanner"></div>
+        <div class="kpis" id="kpis"></div>
 
-    <div class="grid-two">
-      <section class="block">
-        <div class="block-head">
-          <h2><span class="num">III.</span> The monthly ledger</h2>
-          <label class="budget">Budget ₹<input id="budget" type="number" min="0" step="500" /></label>
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Risk timeline</h3><p>Every day of the last six months. Bar height is spend, red marks a day with a flagged payment. Click a day to inspect it.</p></div>
+            <div class="legend inline"><span><i class="sw sw-ink"></i>Normal day</span><span><i class="sw sw-red"></i>Flagged day</span></div>
+          </div>
+          <div id="timeline" class="chart tl"></div>
         </div>
-        <p class="lede">Solid ink is spent, red is under question, hatched is where this month is heading at the current pace.</p>
-        <div id="monthChart" class="chart"></div>
-      </section>
 
-      <section class="block">
-        <div class="block-head"><h2><span class="num">IV.</span> Benford's test</h2></div>
-        <p class="lede">In honest financial records, about 30% of amounts start with a 1 and fewer than 5% start with a 9. Fabricated or manipulated books drift from this curve.</p>
-        <div id="benfordChart" class="chart"></div>
-        <p id="benfordVerdict" class="small-verdict"></p>
-      </section>
-    </div>
-
-    <section class="block">
-      <div class="block-head"><h2><span class="num">V.</span> Habit fingerprint</h2></div>
-      <p class="lede">When you usually spend, by weekday and hour. Darker ink means more spending at that time. Red rings mark a flagged entry, which usually falls outside your normal pattern.</p>
-      <div id="heatmap" class="chart"></div>
-    </section>
-
-    <section class="block">
-      <div class="block-head">
-        <h2><span class="num">VI.</span> The books <span id="txCount" class="count"></span></h2>
-        <div class="filters">
-          <input id="search" placeholder="Search merchant or note" />
-          <select id="catFilter"><option value="">All categories</option></select>
-          <label class="check"><input id="onlyFlagged" type="checkbox" /> Redlined only</label>
+        <div class="grid g-2-1">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Monthly spend</h3><p>Click a month to see its transactions</p></div>
+              <label class="budget">Budget <span>₹</span><input id="budget" type="number" min="0" step="500" /></label>
+            </div>
+            <div id="monthChart" class="chart"></div>
+            <div class="legend">
+              <span><i class="sw sw-ink"></i>Spent</span><span><i class="sw sw-red"></i>Under review</span><span><i class="sw sw-hatch"></i>Projected</span><span><i class="sw sw-dash"></i>Budget</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>Risk exposure</h3><p>Open cases by severity and signal</p></div></div>
+            <div id="riskBreakdown"></div>
+          </div>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table class="ledger">
-          <thead><tr><th>Date</th><th>Time</th><th>Merchant</th><th>Category</th><th>Paid with</th><th class="r">Amount</th><th class="r">Risk</th><th></th></tr></thead>
-          <tbody id="txBody"></tbody>
-        </table>
-      </div>
-      <button id="showMore" class="link more" hidden>Show all entries</button>
-    </section>
 
-    <section class="block methods">
-      <div class="block-head"><h2><span class="num">VII.</span> Methods</h2></div>
-      <div class="methods-grid">
-        <div><h3>Robust outlier</h3><p>Median and median absolute deviation of log-amounts per category, so a single huge charge can't hide by inflating the average. Flags modified z &gt; 3.5.</p></div>
-        <div><h3>Duplicate charge</h3><p>Same merchant and same amount within 48 hours (2 hours for small amounts).</p></div>
-        <div><h3>Split purchase</h3><p>Several same-day charges at one merchant, each under the ₹5,000 approval limit but adding up to more than it.</p></div>
-        <div><h3>Threshold hugging</h3><p>Amounts in the last 5% below the approval limit, a classic expense-fraud tell.</p></div>
-        <div><h3>Off-habit timing</h3><p>Large spends in hours that account for less than 2% of your history.</p></div>
-        <div><h3>Unknown payee</h3><p>First-ever merchant charging above your 90th percentile for that category. Only checked once there are 3 weeks of history to compare against.</p></div>
-        <div><h3>Category surge</h3><p>Last 30 days compared with the average of the three 30-day windows before them.</p></div>
-        <div><h3>Benford's law</h3><p>First-digit distribution tested with Pearson's χ² (8 df) against log₁₀(1 + 1/d).</p></div>
-      </div>
-    </section>
+        <div class="grid g-3-2">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Priority queue</h3><p>Highest-scoring open cases</p></div>
+              <a href="#cases" class="link-btn">Open investigator <span data-icon="arrow"></span></a>
+            </div>
+            <div id="priority" class="priority"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>Insights</h3><p>Generated from your ledger</p></div></div>
+            <ul id="notes" class="insights"></ul>
+          </div>
+        </div>
 
-    <footer class="colophon">
-      Redline · All analysis runs in your browser, so no entry ever leaves this device.
-    </footer>
+        <div class="grid g-1-1">
+          <div class="card">
+            <div class="card-head"><div><h3>Spend by category</h3><p>Last 30 days compared with the 30 days before</p></div></div>
+            <div id="catBreakdown"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>Recurring charges</h3><p>Subscriptions and fixed bills, detected automatically</p></div></div>
+            <div id="recurring"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Cases ───── -->
+      <section class="page" data-page="cases" hidden>
+        <div class="page-head">
+          <div><h1>Case investigator</h1><p class="sub">Every flagged payment, the evidence behind its score, and where it sits against your normal.</p></div>
+        </div>
+        <div class="split">
+          <div class="card case-list-card">
+            <div class="seg" id="caseTabs">
+              <button data-tab="open">Open</button><button data-tab="confirmed">Fraud</button><button data-tab="dismissed">Cleared</button>
+            </div>
+            <div class="chips" id="sevChips">
+              <button data-sev="all">All</button><button data-sev="High">High</button><button data-sev="Medium">Medium+</button>
+            </div>
+            <div id="caseList" class="case-list"></div>
+          </div>
+          <div class="card case-detail" id="caseDetail"></div>
+        </div>
+      </section>
+
+      <!-- ───── Transactions ───── -->
+      <section class="page" data-page="transactions" hidden>
+        <div class="page-head">
+          <div><h1>Transactions</h1><p class="sub" id="txSub"></p></div>
+        </div>
+        <div class="card flush">
+          <div class="toolbar">
+            <div class="search"><span data-icon="search"></span><input id="search" placeholder="Search merchant or note" /></div>
+            <select id="catFilter"><option value="">All categories</option></select>
+            <label class="toggle"><input id="onlyFlagged" type="checkbox" /><span class="track"></span>Flagged only</label>
+            <div id="filterChips" class="fchips"></div>
+            <button class="btn ghost sm text-danger" id="btnClear"><span data-icon="trash"></span>Clear ledger</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Merchant</th><th>Category</th><th>Date</th><th>Method</th><th class="r">Amount</th><th class="r">Risk</th><th></th></tr></thead>
+              <tbody id="txBody"></tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </div>
+      </section>
+
+      <!-- ───── Analytics ───── -->
+      <section class="page" data-page="analytics" hidden>
+        <div class="page-head">
+          <div><h1>Analytics</h1><p class="sub">Forensic tests across the whole ledger, and a planner for what to do next.</p></div>
+        </div>
+        <div class="grid g-3-2">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Benford's law</h3><p>In honest records about 30% of amounts start with 1 and under 5% with 9. Invented numbers break this curve.</p></div>
+              <span id="benfordBadge"></span>
+            </div>
+            <div id="benfordChart" class="chart"></div>
+            <div class="legend"><span><i class="sw sw-ink"></i>Your ledger</span><span><i class="sw sw-red"></i>Over-represented</span><span><i class="sw sw-ring"></i>Benford expected</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>Test statistics</h3><p>Pearson χ² goodness of fit, 8 degrees of freedom</p></div></div>
+            <div id="benfordStats"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Habit fingerprint</h3><p>When you spend, by weekday and hour. Rings mark flagged payments. Click a cell to see those payments.</p></div>
+            <div class="scale"><span>Less</span><i></i><i></i><i></i><i></i><i></i><span>More</span></div>
+          </div>
+          <div id="heatmap" class="chart heat"></div>
+        </div>
+
+        <div class="grid g-1-1">
+          <div class="card">
+            <div class="card-head"><div><h3>Savings planner</h3><p>Drag to trim flexible categories. Based on your clean spending over the last 90 days.</p></div></div>
+            <div id="planner"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>Category surges</h3><p>Last 30 days compared with the mean of the three prior 30-day windows</p></div></div>
+            <div id="patterns"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───── Methods ───── -->
+      <section class="page" data-page="methods" hidden>
+        <div class="page-head">
+          <div><h1>Methods &amp; tuning</h1><p class="sub">Each rule adds a weight. The risk score is their sum, capped at 99. High ≥ 60 · Medium ≥ 35 · shown from 30.</p></div>
+        </div>
+        <div class="card settings">
+          <div class="card-head"><div><h3>Detection settings</h3><p>Changes re-run the audit instantly</p></div><span id="tuneResult" class="badge mute"></span></div>
+          <div class="set-grid">
+            <label class="set">
+              <span class="set-t">Approval limit</span>
+              <span class="set-d">Payments split or kept just under this amount are flagged.</span>
+              <span class="money"><span>₹</span><input id="limitInput" type="number" min="500" step="500" /></span>
+            </label>
+            <label class="set">
+              <span class="set-t">Sensitivity <b id="sensLabel"></b></span>
+              <span class="set-d">How unusual an amount must be before it counts as an outlier.</span>
+              <input id="sensInput" type="range" min="1" max="5" step="1" />
+              <span class="range-l"><span>Relaxed</span><span>Balanced</span><span>Strict</span></span>
+            </label>
+            <label class="set">
+              <span class="set-t">Monthly budget</span>
+              <span class="set-d">Used for the projection and budget warnings.</span>
+              <span class="money"><span>₹</span><input id="budgetInput" type="number" min="0" step="500" /></span>
+            </label>
+          </div>
+        </div>
+        <div class="methods" id="methods"></div>
+      </section>
+
+    </main>
   </div>
+</div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js"></script>
+<!-- ═════════ New entry dialog ═════════ -->
+<dialog id="entryDialog" class="dialog">
+  <form id="expForm">
+    <div class="dialog-head">
+      <div><h3>New entry</h3><p>Leave the category blank and Redline will infer it.</p></div>
+      <button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button>
+    </div>
+    <div class="form-grid">
+      <label>Merchant<input type="text" name="merchant" required placeholder="e.g. Swiggy" /></label>
+      <label>Amount (₹)<input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00" /></label>
+      <label>Date<input type="date" name="date" required /></label>
+      <label>Time<input type="time" name="time" value="12:00" /></label>
+      <label>Category<select name="category"><option value="">Infer automatically</option></select></label>
+      <label>Payment method<select name="method">
+        <option>UPI</option><option>Credit Card</option><option>Debit Card</option><option>Cash</option><option>Net Banking</option>
+      </select></label>
+      <label class="span2">Note<input type="text" name="note" placeholder="Optional" /></label>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary">Add and audit</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="tip" class="tip"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
 </body>
 </html>
